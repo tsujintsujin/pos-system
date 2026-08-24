@@ -10,7 +10,7 @@ import { BASE_PATH } from "@/lib/base-path";
 // JWT signature check here (jose, no bcryptjs/Prisma) — DB-backed permission checks
 // belong in the route handlers/pages themselves (see lib/auth.ts requireRole()).
 
-const PUBLIC_PATHS = ["/login"];
+const PUBLIC_PATHS = ["/login", "/switch-user"];
 
 function isPublicPath(pathname: string) {
   if (PUBLIC_PATHS.includes(pathname)) return true;
