@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { computeCart } from "@/lib/sales-calc";
 import type { DiscountInput, TaxableLine } from "@/lib/sales-calc";
 import { completeSale, holdSale, voidParkedSale } from "@/app/actions/sales";
@@ -248,19 +249,19 @@ export default function SalesTerminal({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <a
+          <Link
             href="/dashboard"
             className="flex min-h-11 cursor-pointer items-center gap-1 rounded-md px-2 text-sm font-medium text-text-muted transition-colors duration-150 hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           >
             <ChevronLeftIcon className="h-4 w-4" />
             Dashboard
-          </a>
-          <a
+          </Link>
+          <Link
             href="/shift"
             className="flex min-h-11 cursor-pointer items-center px-2 text-sm font-medium text-text-muted transition-colors duration-150 hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           >
             Shift
-          </a>
+          </Link>
         </div>
       </header>
 
@@ -400,13 +401,13 @@ export default function SalesTerminal({
               </button>
             </div>
 
-            <a
+            <Link
               href="/returns"
               className="flex min-h-11 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm font-medium text-text-muted transition-colors duration-150 hover:bg-bg hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >
               <ReturnArrowIcon className="h-4 w-4" />
               Refund / return a sale
-            </a>
+            </Link>
           </div>
         </div>
       )}
