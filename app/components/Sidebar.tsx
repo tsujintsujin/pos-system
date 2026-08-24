@@ -72,9 +72,12 @@ function isActive(pathname: string, href: string): boolean {
 export default function Sidebar({
   userName,
   roleName,
+  onNavigate,
 }: {
   userName: string;
   roleName: string;
+  /** Called when a nav link is tapped — used to close the mobile drawer. */
+  onNavigate?: () => void;
 }) {
   const pathname = usePathname();
   const initial = userName.trim().charAt(0).toUpperCase() || "?";
@@ -102,6 +105,7 @@ export default function Sidebar({
                     <Link
                       href={item.href}
                       aria-current={active ? "page" : undefined}
+                      onClick={onNavigate}
                       className={cn(
                         "flex min-h-11 cursor-pointer items-center gap-2.5 rounded-md px-2.5 text-sm font-medium transition-colors duration-150",
                         "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",

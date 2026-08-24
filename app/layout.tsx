@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Fira_Code, Fira_Sans } from "next/font/google";
+import GlobalProcessingIndicator from "@/app/components/GlobalProcessingIndicator";
 import "./globals.css";
 
 const firaSans = Fira_Sans({
@@ -26,7 +27,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${firaSans.variable} ${firaCode.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
+      <body className="min-h-full flex flex-col font-sans">
+        {children}
+        <GlobalProcessingIndicator />
+      </body>
     </html>
   );
 }

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import IdleLockGuard from "@/app/components/IdleLockGuard";
-import Sidebar from "@/app/components/Sidebar";
+import AppShell from "@/app/components/AppShell";
 
 /**
  * /dashboard sits outside the (catalog) route group (it existed before that group was
@@ -16,12 +16,9 @@ export default async function DashboardLayout({ children }: LayoutProps<"/dashbo
 
   return (
     <IdleLockGuard>
-      <div className="flex min-h-screen w-full flex-1">
-        <Sidebar userName={user.name} roleName={user.role.name} />
-        <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 py-8">
-          {children}
-        </div>
-      </div>
+      <AppShell userName={user.name} roleName={user.role.name}>
+        {children}
+      </AppShell>
     </IdleLockGuard>
   );
 }

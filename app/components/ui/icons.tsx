@@ -439,6 +439,24 @@ export function XIcon({ className }: { className?: string }) {
   );
 }
 
+/** Mobile hamburger menu toggle for the back-office sidebar drawer. */
+export function MenuIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 6h16M4 12h16M4 18h16" />
+    </svg>
+  );
+}
+
 /** CSV export action on report pages. */
 export function DownloadIcon({ className }: { className?: string }) {
   return (
