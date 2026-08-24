@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 import { SESSION_COOKIE_NAME } from "@/lib/session-constants";
+import { BASE_PATH } from "@/lib/base-path";
 
 // Note: `middleware.ts` was renamed to `proxy.ts` in Next.js 16 — see
 // node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/proxy.md.
@@ -41,7 +42,7 @@ export async function proxy(request: NextRequest) {
 
   const authenticated = await hasValidSession(request);
   if (!authenticated) {
-    const loginUrl = new URL("/login", request.url);
+    const loginUrl = new URL(`${BASE_PATH}/login`, request.url);
     loginUrl.searchParams.set("from", pathname);
     return NextResponse.redirect(loginUrl);
   }
