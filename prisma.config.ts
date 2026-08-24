@@ -9,7 +9,13 @@ export default defineConfig({
     path: "prisma/migrations",
     seed: "tsx prisma/seed.ts",
   },
+  // Only used by the CLI (migrate/introspect) — the app's runtime connection is a
+  // separate adapter instance (see lib/prisma.ts), which uses the pooled DATABASE_URL.
+  // Migrations need the non-pooled DIRECT_URL — pgbouncer's transaction-mode pooler
+  // doesn't support the prepared statements/DDL migrate needs. This Prisma version's
+  // config type has no `directUrl` field (despite some docs suggesting otherwise) —
+  // confirmed against node_modules/@prisma/config/dist/index.d.ts's Datasource type.
   datasource: {
-    url: process.env["DATABASE_URL"],
+    url: process.env["DIRECT_URL"],
   },
 });

@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { PrismaClient } from "../app/generated/prisma/client";
-import { PrismaMariaDb } from "@prisma/adapter-mariadb";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { computeCart, round2, resolveLineTax } from "../lib/sales-calc";
 import type { TaxableLine, DiscountInput } from "../lib/sales-calc";
 import { buildReceiptNumber, placeholderReceiptNumber } from "../lib/receipt-number";
@@ -22,7 +22,7 @@ import { buildReceiptNumber, placeholderReceiptNumber } from "../lib/receipt-num
  * are never called — only their data shape + arithmetic is mirrored.
  */
 
-const adapter = new PrismaMariaDb(process.env.DATABASE_URL!, {});
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
 
 const LOCATION_ID = 1;

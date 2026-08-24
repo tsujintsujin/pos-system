@@ -1,4 +1,4 @@
-// POS System — Prisma schema (MySQL)
+// POS System — Prisma schema (PostgreSQL via Supabase)
 // See plan: single store for v1, but location/register modeled for future multi-store.
 
 generator client {
@@ -7,7 +7,7 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
 }
 
 // ---------- Locations / Registers ----------
