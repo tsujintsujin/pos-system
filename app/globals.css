@@ -1,0 +1,111 @@
+@import "tailwindcss";
+
+/*
+ * Swappable palette (Data-Dense Dashboard system).
+ * Every color used across the app must route through one of these
+ * :root custom properties (or the Tailwind utility classes generated
+ * from them below) — never a hardcoded hex in a className or inline
+ * style. A future palette swap is a one-block edit here.
+ */
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+
+  /* Brand / neutral layer */
+  --color-primary: #3b82f6;
+  --color-primary-hover: #2563eb;
+  --color-secondary: #60a5fa;
+  --color-accent: #f97316;
+  --color-accent-hover: #ea580c;
+  --color-bg: #f8fafc;
+  --color-surface: #ffffff;
+  --color-text: #1e293b;
+  --color-text-muted: #475569;
+  --color-border: #e2e8f0;
+
+  /* Semantic state colors — already used ad hoc as green/red/amber
+     throughout the app; formalized here so every Badge/alert/status
+     indicator shares one source of truth. */
+  --color-success: #16a34a;
+  --color-success-bg: #f0fdf4;
+  --color-success-border: #bbf7d0;
+  --color-danger: #dc2626;
+  --color-danger-hover: #b91c1c;
+  --color-danger-bg: #fef2f2;
+  --color-danger-border: #fecaca;
+  --color-warning: #d97706;
+  --color-warning-bg: #fffbeb;
+  --color-warning-border: #fde68a;
+  --color-info: var(--color-primary);
+  --color-info-bg: #eff6ff;
+  --color-info-border: #bfdbfe;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-primary: var(--color-primary);
+  --color-primary-hover: var(--color-primary-hover);
+  --color-secondary: var(--color-secondary);
+  --color-accent: var(--color-accent);
+  --color-accent-hover: var(--color-accent-hover);
+  --color-bg: var(--color-bg);
+  --color-surface: var(--color-surface);
+  --color-text: var(--color-text);
+  --color-text-muted: var(--color-text-muted);
+  --color-border: var(--color-border);
+
+  --color-success: var(--color-success);
+  --color-success-bg: var(--color-success-bg);
+  --color-success-border: var(--color-success-border);
+  --color-danger: var(--color-danger);
+  --color-danger-hover: var(--color-danger-hover);
+  --color-danger-bg: var(--color-danger-bg);
+  --color-danger-border: var(--color-danger-border);
+  --color-warning: var(--color-warning);
+  --color-warning-bg: var(--color-warning-bg);
+  --color-warning-border: var(--color-warning-border);
+  --color-info: var(--color-info);
+  --color-info-bg: var(--color-info-bg);
+  --color-info-border: var(--color-info-border);
+
+  --font-sans: var(--font-fira-sans);
+  --font-mono: var(--font-fira-code);
+  --font-heading: var(--font-fira-code);
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-heading), monospace;
+}
+
+/* Sales Terminal receipt printing (app/components/sales/Receipt.tsx) — hide everything
+   except the receipt itself, sized narrow to mimic an 80mm thermal receipt. No
+   ESC-POS/silent printing integration; this is plain browser print for v1. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #receipt-print-area,
+  #receipt-print-area * {
+    visibility: visible;
+  }
+  #receipt-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 80mm;
+    max-width: 80mm;
+  }
+}
