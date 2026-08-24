@@ -36,11 +36,10 @@ function ensurePatched() {
 }
 
 export default function GlobalProcessingIndicator() {
-  const [count, setCount] = useState(0);
+  const [count, setCount] = useState(() => activeRequests);
 
   useEffect(() => {
     ensurePatched();
-    setCount(activeRequests);
     listeners.add(setCount);
     return () => {
       listeners.delete(setCount);
