@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { requireRole, getCurrentUser } from "@/lib/auth";
 import { parseDateRange, getVoidRefundReport, getCancellableSales } from "@/lib/reports";
 import ReportDateFilter from "@/app/components/ReportDateFilter";
@@ -152,12 +153,12 @@ export default async function VoidRefundReportPage({
               report.refunds.map((r) => (
                 <TableRow key={r.returnId}>
                   <TableCell>
-                    <a
+                    <Link
                       href="/returns"
                       className="cursor-pointer text-text transition-colors duration-150 hover:text-primary hover:underline"
                     >
                       {r.originalReceiptNumber}
-                    </a>
+                    </Link>
                   </TableCell>
                   <TableCell>{r.processedByName}</TableCell>
                   <TableCell className="text-right font-medium">₱{r.totalRefunded.toFixed(2)}</TableCell>

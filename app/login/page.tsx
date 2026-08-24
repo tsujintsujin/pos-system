@@ -2,6 +2,7 @@
 
 import { Suspense, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import Card from "@/app/components/ui/Card";
 import Input from "@/app/components/ui/Input";
 import Button from "@/app/components/ui/Button";
@@ -120,12 +121,12 @@ function LoginForm() {
 
         <p className="mt-6 text-center text-xs text-text-muted">
           Shared terminal?{" "}
-          <a
+          <Link
             href="/switch-user"
             className="cursor-pointer font-medium text-primary underline-offset-2 hover:underline"
           >
             Switch user with PIN
-          </a>
+          </Link>
         </p>
       </Card>
     </div>

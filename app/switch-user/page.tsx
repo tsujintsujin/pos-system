@@ -2,6 +2,7 @@
 
 import { Suspense, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import Card from "@/app/components/ui/Card";
 import Button from "@/app/components/ui/Button";
 import { BackspaceIcon, LockIcon } from "@/app/components/ui/icons";
@@ -211,12 +212,12 @@ function PinForm() {
         </form>
 
         <p className="mt-6 text-xs text-text-muted">
-          <a
+          <Link
             href="/login"
             className="cursor-pointer font-medium text-primary underline-offset-2 hover:underline"
           >
             Log in with email instead
-          </a>
+          </Link>
         </p>
       </Card>
     </div>
