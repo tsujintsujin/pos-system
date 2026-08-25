@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import type { ComputedLine } from "@/lib/sales-calc";
 import EmptyState from "@/app/components/ui/EmptyState";
 import { BoxIcon, CartIcon, MinusIcon, PlusIcon, XIcon } from "@/app/components/ui/icons";
@@ -54,10 +55,7 @@ export default function CartTable({
           >
             <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-bg">
               {imageUrl ? (
-                // Same plain-<img>, no-remotePatterns convention as ProductGrid.tsx / the
-                // catalog product edit page.
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={imageUrl} alt="" className="h-full w-full object-cover" />
+                <Image src={imageUrl} alt="" width={56} height={56} className="h-full w-full object-cover" />
               ) : (
                 <BoxIcon className="h-6 w-6 text-text-muted" />
               )}

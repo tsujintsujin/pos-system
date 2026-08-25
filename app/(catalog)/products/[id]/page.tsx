@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Image from "next/image";
 import { prisma } from "@/lib/prisma";
 import {
   updateProduct,
@@ -160,13 +161,11 @@ export default async function EditProductPage({
               </p>
             </div>
             {product.imageUrl && (
-              // arbitrary external URLs, no next.config.ts remotePatterns configured; plain
-              // <img> needs no host allowlist and a broken URL just falls back to the
-              // browser's default broken-image icon.
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <Image
                 src={product.imageUrl}
                 alt={product.name}
+                width={64}
+                height={64}
                 className="h-16 w-16 shrink-0 rounded-md border border-border object-cover"
               />
             )}

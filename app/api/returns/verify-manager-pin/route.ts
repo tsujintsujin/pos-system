@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { findApprovingManager } from "@/lib/manager-approval";
+import { getClientIp, isRateLimited, recordFailure, recordSuccess } from "@/lib/rate-limit";
 
 /**
  * POST /api/returns/verify-manager-pin — one-shot check of a PIN against every active
@@ -11,12 +12,22 @@ import { findApprovingManager } from "@/lib/manager-approval";
  *
  * This is UX-only — `completeReturn` (app/actions/returns.ts) independently re-verifies
  * the PIN server-side before actually processing the refund, so a tampered client can't
- * skip the gate by faking a success response here.
+ * skip the gate by faking a success response here. Still rate-limited: this endpoint is a
+ * PIN-guessing oracle in its own right even though it isn't the actual authorization gate.
  */
 export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  const rateLimitKey = `manager-pin:${getClientIp(request)}`;
+  const rateLimit = isRateLimited(rateLimitKey);
+  if (rateLimit.limited) {
+    return NextResponse.json(
+      { error: `Too many failed attempts. Try again in ${rateLimit.retryAfterSeconds}s.` },
+      { status: 429 },
+    );
   }
 
   let body: { pin?: string };
@@ -33,8 +44,10 @@ export async function POST(request: Request) {
 
   const manager = await findApprovingManager(pin);
   if (!manager) {
+    recordFailure(rateLimitKey);
     return NextResponse.json({ error: "Invalid PIN, or that PIN does not belong to a manager who can approve refunds" }, { status: 401 });
   }
 
+  recordSuccess(rateLimitKey);
   return NextResponse.json({ ok: true, manager: { id: manager.id, name: manager.name } });
 }

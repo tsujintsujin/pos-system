@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import Image from "next/image";
 import type { SearchResultItem } from "@/app/api/sales/search/route";
 import Badge from "@/app/components/ui/Badge";
 import EmptyState from "@/app/components/ui/EmptyState";
@@ -66,14 +67,13 @@ export default function ProductGrid({
           >
             <div className="relative aspect-square w-full shrink-0 overflow-hidden bg-bg">
               {p.imageUrl ? (
-                // Arbitrary external URLs, no next.config.ts remotePatterns configured — same
-                // plain-<img> convention as Product.imageUrl elsewhere in this app (see
-                // app/(catalog)/products/[id]/page.tsx and Receipt.tsx).
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <Image
                   src={p.imageUrl}
                   alt=""
-                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  fill
+                  sizes="(max-width: 640px) 50vw, 200px"
+                  loading="lazy"
+                  className="object-cover transition-transform duration-300 group-hover:scale-105"
                 />
               ) : (
                 <div className="flex h-full w-full items-center justify-center">

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { prisma } from "@/lib/prisma";
 import Banner from "@/app/components/Banner";
 import Input from "@/app/components/ui/Input";
@@ -122,12 +123,12 @@ export default async function ProductsPage({
                 <TableRow key={p.id}>
                   <TableCell>
                     {p.imageUrl ? (
-                      // arbitrary external URLs, no remotePatterns configured; see
-                      // app/(catalog)/products/[id]/page.tsx
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
+                      <Image
                         src={p.imageUrl}
                         alt=""
+                        width={32}
+                        height={32}
+                        loading="lazy"
                         className="h-8 w-8 rounded border border-border object-cover"
                       />
                     ) : (

@@ -2,8 +2,18 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { setSessionCookie } from "@/lib/auth";
+import { getClientIp, isRateLimited, recordFailure, recordSuccess } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
+  const rateLimitKey = `login:${getClientIp(request)}`;
+  const rateLimit = isRateLimited(rateLimitKey);
+  if (rateLimit.limited) {
+    return NextResponse.json(
+      { error: `Too many failed attempts. Try again in ${rateLimit.retryAfterSeconds}s.` },
+      { status: 429 },
+    );
+  }
+
   let body: { email?: string; password?: string };
   try {
     body = await request.json();
@@ -24,8 +34,10 @@ export async function POST(request: Request) {
   });
 
   // Generic error message on purpose — don't reveal whether the email exists.
-  const invalidCredentials = () =>
-    NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
+  const invalidCredentials = () => {
+    recordFailure(rateLimitKey);
+    return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
+  };
 
   if (!user || !user.active || !user.passwordHash) {
     return invalidCredentials();
@@ -35,6 +47,8 @@ export async function POST(request: Request) {
   if (!passwordMatches) {
     return invalidCredentials();
   }
+
+  recordSuccess(rateLimitKey);
 
   await setSessionCookie({
     userId: user.id,

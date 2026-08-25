@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { setSessionCookie } from "@/lib/auth";
+import { getClientIp, isRateLimited, recordFailure, recordSuccess } from "@/lib/rate-limit";
 
 /**
  * Shared-terminal quick-switch: given a PIN, find the matching active user and swap
@@ -13,8 +14,20 @@ import { setSessionCookie } from "@/lib/auth";
  * Note: PINs aren't looked up by a plaintext index (only pinHash is stored), so we
  * bcrypt.compare against each active user that has a PIN set. Fine at small cashier-list
  * scale; revisit if the staff list grows large.
+ *
+ * Rate-limited by IP — a 4-digit PIN is only 10,000 combinations, brute-forceable in
+ * seconds without a lockout. See lib/rate-limit.ts.
  */
 export async function POST(request: Request) {
+  const rateLimitKey = `pin:${getClientIp(request)}`;
+  const rateLimit = isRateLimited(rateLimitKey);
+  if (rateLimit.limited) {
+    return NextResponse.json(
+      { error: `Too many failed attempts. Try again in ${rateLimit.retryAfterSeconds}s.` },
+      { status: 429 },
+    );
+  }
+
   let body: { pin?: string };
   try {
     body = await request.json();
@@ -36,6 +49,7 @@ export async function POST(request: Request) {
     if (!user.pinHash) continue;
     const matches = await bcrypt.compare(pin, user.pinHash);
     if (matches) {
+      recordSuccess(rateLimitKey);
       await setSessionCookie({
         userId: user.id,
         roleId: user.roleId,
@@ -49,5 +63,6 @@ export async function POST(request: Request) {
     }
   }
 
+  recordFailure(rateLimitKey);
   return NextResponse.json({ error: "Invalid PIN" }, { status: 401 });
 }
