@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { containsInsensitive } from "@/lib/list-params";
 import { getCurrentUser } from "@/lib/auth";
 import { resolveLineTax } from "@/lib/sales-calc";
 
@@ -53,9 +54,9 @@ export async function GET(request: NextRequest) {
     where: {
       isActive: true,
       OR: [
-        { sku: { contains: q } },
-        { barcode: { contains: q } },
-        { name: { contains: q } },
+        { sku: containsInsensitive(q) },
+        { barcode: containsInsensitive(q) },
+        { name: containsInsensitive(q) },
       ],
     },
     include: {

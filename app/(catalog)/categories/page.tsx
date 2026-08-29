@@ -8,6 +8,20 @@ import Button, { LinkButton } from "@/app/components/ui/Button";
 import PageHeader from "@/app/components/ui/PageHeader";
 import EmptyState from "@/app/components/ui/EmptyState";
 import { FolderIcon, PencilIcon } from "@/app/components/ui/icons";
+import { Table, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from "@/app/components/ui/Table";
+import TableFilterInput from "@/app/components/ui/TableFilterInput";
+import SortableHeaderCell from "@/app/components/ui/SortableHeaderCell";
+import TablePagination from "@/app/components/ui/TablePagination";
+import {
+  containsInsensitive,
+  clampPage,
+  paginate,
+  parsePage,
+  parsePageSize,
+  parseSort,
+} from "@/lib/list-params";
+
+const SORT_COLUMNS = ["name", "parent"] as const;
 
 type CategoryRow = { id: number; name: string; parentId: number | null };
 
@@ -106,42 +120,54 @@ function CategoryTree({
 export default async function CategoriesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; success?: string; edit?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    sort?: string;
+    dir?: string;
+    page?: string;
+    size?: string;
+    error?: string;
+    success?: string;
+    edit?: string;
+  }>;
 }) {
   const params = await searchParams;
   const editingId = params.edit ? Number(params.edit) : null;
+  const q = (params.q ?? "").trim();
 
-  const categories = await prisma.category.findMany({
-    select: { id: true, name: true, parentId: true },
-    orderBy: { name: "asc" },
-  });
+  const sort = parseSort(params.sort, params.dir, SORT_COLUMNS, { key: "name", dir: "asc" });
+  const pageSize = parsePageSize(params.size);
+
+  // The unfiltered view is a hierarchy, so it renders as the full tree — paginating a
+  // tree would orphan children from their parents. A live name filter switches to a
+  // flat, paginated, sortable result table instead, which is where a long category
+  // list actually needs paging.
+  const [categories, matchCount] = await Promise.all([
+    prisma.category.findMany({
+      select: { id: true, name: true, parentId: true },
+      orderBy: { name: "asc" },
+    }),
+    q ? prisma.category.count({ where: { name: containsInsensitive(q) } }) : Promise.resolve(0),
+  ]);
+
+  const page = clampPage(parsePage(params.page), matchCount, pageSize);
+  const matches = q
+    ? await prisma.category.findMany({
+        where: { name: containsInsensitive(q) },
+        select: { id: true, name: true, parent: { select: { name: true } } },
+        orderBy: sort.key === "parent" ? { parent: { name: sort.dir } } : { name: sort.dir },
+        ...paginate(page, pageSize),
+      })
+    : [];
 
   const byParent = buildTree(categories);
+  const sortProps = { activeColumn: params.sort ?? null, activeDirection: sort.dir };
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Categories" subtitle={`${categories.length} categor${categories.length === 1 ? "y" : "ies"}`} />
 
       <Banner error={params.error} success={params.success} />
-
-      <Card className="p-0">
-        <div className="border-b border-border px-4 py-3">
-          <h2 className="text-sm font-semibold text-text">All categories</h2>
-        </div>
-        <div className="px-4 py-2">
-          {categories.length === 0 ? (
-            <EmptyState message="No categories yet" subMessage="Add one using the form below." />
-          ) : (
-            <CategoryTree
-              byParent={byParent}
-              parentId={null}
-              depth={0}
-              editingId={editingId}
-              allCategories={categories}
-            />
-          )}
-        </div>
-      </Card>
 
       <Card>
         <h2 className="mb-3 text-sm font-semibold text-text">Add category</h2>
@@ -168,6 +194,91 @@ export default async function CategoriesPage({
           <Button type="submit">Add category</Button>
         </form>
       </Card>
+
+      <div className="flex flex-wrap items-end gap-3">
+        <TableFilterInput
+          name="q"
+          label="Search categories"
+          placeholder="Search categories…"
+          defaultValue={q}
+          className="w-64"
+        />
+        {q && (
+          <LinkButton href="/categories" variant="ghost" size="sm">
+            Clear
+          </LinkButton>
+        )}
+      </div>
+
+      {q ? (
+        matchCount === 0 ? (
+          <EmptyState message="No categories match this search" subMessage="Try a different search." />
+        ) : (
+          <>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <SortableHeaderCell column="name" {...sortProps}>
+                    Name
+                  </SortableHeaderCell>
+                  <SortableHeaderCell column="parent" {...sortProps}>
+                    Parent
+                  </SortableHeaderCell>
+                  <TableHeaderCell className="text-right">Actions</TableHeaderCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {matches.map((cat) => (
+                  <TableRow key={cat.id}>
+                    <TableCell className="font-medium">
+                      <span className="flex items-center gap-2">
+                        <FolderIcon className="h-4 w-4 text-text-muted" />
+                        {cat.name}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-text-muted">{cat.parent?.name ?? "—"}</TableCell>
+                    <TableCell className="text-right">
+                      <span className="inline-flex items-center gap-2">
+                        <LinkButton href={`/categories?edit=${cat.id}`} variant="secondary" size="sm">
+                          <PencilIcon className="h-3.5 w-3.5" />
+                          Edit
+                        </LinkButton>
+                        <form action={deleteCategory.bind(null, cat.id)}>
+                          <Button type="submit" variant="danger" size="sm">
+                            Delete
+                          </Button>
+                        </form>
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+
+            <TablePagination storageKey="categories" page={page} pageSize={pageSize} total={matchCount} />
+          </>
+        )
+      ) : (
+        <Card className="p-0">
+          <div className="border-b border-border px-4 py-3">
+            <h2 className="text-sm font-semibold text-text">All categories</h2>
+          </div>
+          <div className="px-4 py-2">
+            {categories.length === 0 ? (
+              <EmptyState message="No categories yet" subMessage="Add one using the form above." />
+            ) : (
+              <CategoryTree
+                byParent={byParent}
+                parentId={null}
+                depth={0}
+                editingId={editingId}
+                allCategories={categories}
+              />
+            )}
+          </div>
+        </Card>
+      )}
+
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { containsInsensitive } from "@/lib/list-params";
 import { getCurrentUser } from "@/lib/auth";
 
 export interface CustomerSearchResult {
@@ -30,9 +31,9 @@ export async function GET(request: NextRequest) {
   const customers = await prisma.customer.findMany({
     where: {
       OR: [
-        { name: { contains: q } },
-        { phone: { contains: q } },
-        { email: { contains: q } },
+        { name: containsInsensitive(q) },
+        { phone: containsInsensitive(q) },
+        { email: containsInsensitive(q) },
       ],
     },
     select: { id: true, name: true, phone: true, email: true, storeCreditBalance: true },
