@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { updateCustomer } from "@/app/actions/customers";
@@ -5,7 +6,7 @@ import Banner from "@/app/components/Banner";
 import Card from "@/app/components/ui/Card";
 import Input from "@/app/components/ui/Input";
 import Select from "@/app/components/ui/Select";
-import Button from "@/app/components/ui/Button";
+import Button, { LinkButton } from "@/app/components/ui/Button";
 import PageHeader from "@/app/components/ui/PageHeader";
 import StatCard from "@/app/components/ui/StatCard";
 import EmptyState from "@/app/components/ui/EmptyState";
@@ -31,7 +32,13 @@ export default async function CustomerProfilePage({
           where: { status: "COMPLETED" },
           orderBy: { completedAt: "desc" },
           take: 10,
-          select: { id: true, receiptNumber: true, grandTotal: true, completedAt: true },
+          select: {
+            id: true,
+            receiptNumber: true,
+            grandTotal: true,
+            completedAt: true,
+            _count: { select: { lineItems: true } },
+          },
         },
       },
     }),
@@ -86,7 +93,12 @@ export default async function CustomerProfilePage({
       </Card>
 
       <Card>
-        <h2 className="mb-3 text-sm font-semibold text-text">Recent completed sales</h2>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-text">Recent completed sales</h2>
+          <LinkButton href={`/receipts?customer=${encodeURIComponent(customer.name)}`} variant="secondary" size="sm">
+            All receipts
+          </LinkButton>
+        </div>
         {customer.sales.length === 0 ? (
           <EmptyState message="No completed sales for this customer yet" />
         ) : (
@@ -95,16 +107,25 @@ export default async function CustomerProfilePage({
               <TableRow>
                 <TableHeaderCell>Receipt #</TableHeaderCell>
                 <TableHeaderCell>Date</TableHeaderCell>
+                <TableHeaderCell className="text-right">Items</TableHeaderCell>
                 <TableHeaderCell className="text-right">Total</TableHeaderCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {customer.sales.map((s) => (
                 <TableRow key={s.id}>
-                  <TableCell>{s.receiptNumber}</TableCell>
+                  <TableCell>
+                    <Link
+                      href={`/receipts/${s.id}`}
+                      className="cursor-pointer font-medium text-text transition-colors duration-150 hover:text-primary hover:underline"
+                    >
+                      {s.receiptNumber}
+                    </Link>
+                  </TableCell>
                   <TableCell className="text-text-muted">
                     {s.completedAt ? new Date(s.completedAt).toLocaleString() : "—"}
                   </TableCell>
+                  <TableCell className="text-right">{s._count.lineItems}</TableCell>
                   <TableCell className="text-right">₱{s.grandTotal.toFixed(2)}</TableCell>
                 </TableRow>
               ))}

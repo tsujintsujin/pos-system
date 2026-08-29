@@ -1,148 +1,173 @@
 import Link from "next/link";
+import type { Prisma } from "@/app/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
-import { createCustomer } from "@/app/actions/customers";
+import AddCustomerModal from "@/app/components/AddCustomerModal";
 import Banner from "@/app/components/Banner";
-import Card from "@/app/components/ui/Card";
-import Input from "@/app/components/ui/Input";
-import Select from "@/app/components/ui/Select";
-import Button, { LinkButton } from "@/app/components/ui/Button";
+import { LinkButton } from "@/app/components/ui/Button";
 import PageHeader from "@/app/components/ui/PageHeader";
 import EmptyState from "@/app/components/ui/EmptyState";
-import { Table, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from "@/app/components/ui/Table";
-import { SearchIcon } from "@/app/components/ui/icons";
+import { Table, TableHead, TableBody, TableRow, TableCell } from "@/app/components/ui/Table";
+import TableFilterInput from "@/app/components/ui/TableFilterInput";
+import SortableHeaderCell from "@/app/components/ui/SortableHeaderCell";
+import TablePagination from "@/app/components/ui/TablePagination";
+import {
+  containsInsensitive,
+  clampPage,
+  paginate,
+  parsePage,
+  parsePageSize,
+  parseSort,
+} from "@/lib/list-params";
+
+const SORT_COLUMNS = ["name", "phone", "email", "group", "loyalty", "credit"] as const;
+type SortColumn = (typeof SORT_COLUMNS)[number];
+
+function orderByFor(key: SortColumn, dir: "asc" | "desc"): Prisma.CustomerOrderByWithRelationInput {
+  switch (key) {
+    case "phone":
+      return { phone: dir };
+    case "email":
+      return { email: dir };
+    case "group":
+      return { customerGroup: { name: dir } };
+    case "loyalty":
+      return { loyaltyPointsBalance: dir };
+    case "credit":
+      return { storeCreditBalance: dir };
+    default:
+      return { name: dir };
+  }
+}
 
 export default async function CustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; error?: string; success?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    sort?: string;
+    dir?: string;
+    page?: string;
+    size?: string;
+    error?: string;
+    success?: string;
+  }>;
 }) {
   const params = await searchParams;
   const q = (params.q ?? "").trim();
 
-  const [customerGroups, customers] = await Promise.all([
+  const sort = parseSort(params.sort, params.dir, SORT_COLUMNS, { key: "name", dir: "asc" });
+  const pageSize = parsePageSize(params.size);
+
+  // Partial + case-insensitive: typing "an" matches both "Banana Republic" and "Andrea".
+  const where: Prisma.CustomerWhereInput = q
+    ? {
+        OR: [
+          { name: containsInsensitive(q) },
+          { phone: containsInsensitive(q) },
+          { email: containsInsensitive(q) },
+        ],
+      }
+    : {};
+
+  const [customerGroups, total] = await Promise.all([
     prisma.customerGroup.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
-    prisma.customer.findMany({
-      where: q
-        ? {
-            OR: [
-              { name: { contains: q } },
-              { phone: { contains: q } },
-              { email: { contains: q } },
-            ],
-          }
-        : {},
-      include: { customerGroup: { select: { name: true } } },
-      orderBy: { name: "asc" },
-    }),
+    prisma.customer.count({ where }),
   ]);
+
+  const page = clampPage(parsePage(params.page), total, pageSize);
+  const customers = await prisma.customer.findMany({
+    where,
+    include: { customerGroup: { select: { name: true } } },
+    orderBy: orderByFor(sort.key, sort.dir),
+    ...paginate(page, pageSize),
+  });
+
+  const sortProps = { activeColumn: params.sort ?? null, activeDirection: sort.dir };
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Customers"
-        subtitle={`${customers.length} customer${customers.length === 1 ? "" : "s"}`}
+        subtitle={`${total} customer${total === 1 ? "" : "s"}`}
         actions={
-          <LinkButton href="/customers/groups" variant="secondary" size="sm">
-            Manage customer groups
-          </LinkButton>
+          <>
+            <LinkButton href="/customers/groups" variant="secondary" size="sm">
+              Manage customer groups
+            </LinkButton>
+            <AddCustomerModal customerGroups={customerGroups} />
+          </>
         }
       />
 
       <Banner error={params.error} success={params.success} />
 
-      <form method="GET" className="flex flex-wrap items-end gap-3">
-        <div className="flex flex-col gap-1">
-          <label htmlFor="q" className="text-xs font-medium text-text-muted">
-            Search (name / phone / email)
-          </label>
-          <div className="relative">
-            <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
-            <Input id="q" name="q" defaultValue={q} className="w-64 pl-9" placeholder="Search customers…" />
-          </div>
-        </div>
-        <Button type="submit" variant="secondary">
-          Filter
-        </Button>
+      <div className="flex flex-wrap items-end gap-3">
+        <TableFilterInput
+          name="q"
+          label="Search (name / phone / email)"
+          placeholder="Search customers…"
+          defaultValue={q}
+          className="w-64"
+        />
         {q && (
           <LinkButton href="/customers" variant="ghost" size="sm">
             Clear
           </LinkButton>
         )}
-      </form>
+      </div>
 
-      {customers.length === 0 ? (
-        <EmptyState message="No customers found" subMessage="Try a different search, or add one below." />
+      {total === 0 ? (
+        <EmptyState message="No customers found" subMessage="Try a different search, or add one with the button above." />
       ) : (
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableHeaderCell>Name</TableHeaderCell>
-              <TableHeaderCell>Phone</TableHeaderCell>
-              <TableHeaderCell>Email</TableHeaderCell>
-              <TableHeaderCell>Group</TableHeaderCell>
-              <TableHeaderCell className="text-right">Loyalty pts</TableHeaderCell>
-              <TableHeaderCell className="text-right">Store credit</TableHeaderCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {customers.map((c) => (
-              <TableRow key={c.id}>
-                <TableCell>
-                  <Link
-                    href={`/customers/${c.id}`}
-                    className="cursor-pointer font-medium text-text transition-colors duration-150 hover:text-primary hover:underline"
-                  >
-                    {c.name}
-                  </Link>
-                </TableCell>
-                <TableCell className="text-text-muted">{c.phone ?? "—"}</TableCell>
-                <TableCell className="text-text-muted">{c.email ?? "—"}</TableCell>
-                <TableCell className="text-text-muted">{c.customerGroup?.name ?? "—"}</TableCell>
-                <TableCell className="text-right">{c.loyaltyPointsBalance}</TableCell>
-                <TableCell className="text-right">₱{c.storeCreditBalance.toFixed(2)}</TableCell>
+        <>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <SortableHeaderCell column="name" {...sortProps}>
+                  Name
+                </SortableHeaderCell>
+                <SortableHeaderCell column="phone" {...sortProps}>
+                  Phone
+                </SortableHeaderCell>
+                <SortableHeaderCell column="email" {...sortProps}>
+                  Email
+                </SortableHeaderCell>
+                <SortableHeaderCell column="group" {...sortProps}>
+                  Group
+                </SortableHeaderCell>
+                <SortableHeaderCell column="loyalty" align="right" {...sortProps}>
+                  Loyalty pts
+                </SortableHeaderCell>
+                <SortableHeaderCell column="credit" align="right" {...sortProps}>
+                  Store credit
+                </SortableHeaderCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHead>
+            <TableBody>
+              {customers.map((c) => (
+                <TableRow key={c.id}>
+                  <TableCell>
+                    <Link
+                      href={`/customers/${c.id}`}
+                      className="cursor-pointer font-medium text-text transition-colors duration-150 hover:text-primary hover:underline"
+                    >
+                      {c.name}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-text-muted">{c.phone ?? "—"}</TableCell>
+                  <TableCell className="text-text-muted">{c.email ?? "—"}</TableCell>
+                  <TableCell className="text-text-muted">{c.customerGroup?.name ?? "—"}</TableCell>
+                  <TableCell className="text-right">{c.loyaltyPointsBalance}</TableCell>
+                  <TableCell className="text-right">₱{c.storeCreditBalance.toFixed(2)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+
+          <TablePagination storageKey="customers" page={page} pageSize={pageSize} total={total} />
+        </>
       )}
 
-      <Card>
-        <h2 className="mb-3 text-sm font-semibold text-text">Quick-add customer</h2>
-        <form action={createCustomer} className="flex flex-wrap items-end gap-3">
-          <div className="flex flex-col gap-1">
-            <label htmlFor="name" className="text-xs font-medium text-text-muted">
-              Name <span className="text-danger">*</span>
-            </label>
-            <Input id="name" name="name" required className="w-48" placeholder="e.g. Maria Santos" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="phone" className="text-xs font-medium text-text-muted">
-              Phone
-            </label>
-            <Input id="phone" name="phone" className="w-40" placeholder="e.g. 09171234567" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="email" className="text-xs font-medium text-text-muted">
-              Email
-            </label>
-            <Input id="email" name="email" type="email" className="w-56" placeholder="e.g. maria@example.com" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="customerGroupId" className="text-xs font-medium text-text-muted">
-              Group
-            </label>
-            <Select id="customerGroupId" name="customerGroupId" className="w-40" defaultValue="">
-              <option value="">None</option>
-              {customerGroups.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <Button type="submit">Add customer</Button>
-        </form>
-      </Card>
     </div>
   );
 }

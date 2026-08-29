@@ -12,6 +12,7 @@ export interface ReturnReceiptData {
   originalReceiptNumber: string;
   originalSaleId: number;
   lines: {
+    productId: number;
     name: string;
     sku: string;
     quantityReturned: number;
@@ -71,6 +72,7 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/returns/[id
       const quantityReturned = li.quantityReturned.toNumber();
       const refundAmount = quantity > 0 ? round2((lineTotal / quantity) * quantityReturned) : 0;
       return {
+        productId: sli.productId,
         name: sli.variant ? `${sli.product.name} — ${sli.variant.name}` : sli.product.name,
         sku: sli.variant?.sku ?? sli.product.sku,
         quantityReturned,

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { ReceiptData } from "@/app/api/sales/[id]/receipt/route";
 import Button from "@/app/components/ui/Button";
+import ProductLink from "@/app/components/ui/ProductLink";
 import { CheckCircleIcon, PrinterIcon, SpinnerIcon } from "@/app/components/ui/icons";
 import { apiPath } from "@/lib/base-path";
 
@@ -17,12 +18,16 @@ export default function Receipt({
   receiptLogoUrl,
   receiptFooterText,
   onNewSale,
+  showCompletionHeader = true,
 }: {
   saleId: number;
   currencySymbol: string;
   receiptLogoUrl: string | null;
   receiptFooterText: string | null;
-  onNewSale: () => void;
+  /** Omitted when this is a historical receipt being viewed, not one just rung up. */
+  onNewSale?: () => void;
+  /** The "Sale complete" banner only makes sense straight after checkout. */
+  showCompletionHeader?: boolean;
 }) {
   const [data, setData] = useState<ReceiptData | null>(null);
 
@@ -43,10 +48,12 @@ export default function Receipt({
 
   return (
     <div className="flex flex-col items-center gap-5">
-      <div className="flex flex-col items-center gap-1.5 text-success">
-        <CheckCircleIcon className="h-10 w-10" />
-        <p className="font-heading text-lg font-semibold text-text">Sale complete</p>
-      </div>
+      {showCompletionHeader && (
+        <div className="flex flex-col items-center gap-1.5 text-success">
+          <CheckCircleIcon className="h-10 w-10" />
+          <p className="font-heading text-lg font-semibold text-text">Sale complete</p>
+        </div>
+      )}
 
       {/* Do not remove this id — app/globals.css's @media print rule isolates this
           element as the only visible content when the cashier prints the receipt. */}
@@ -75,7 +82,9 @@ export default function Receipt({
         {data.lines.map((l, i) => (
           <div key={i} className="mb-1 flex justify-between gap-2">
             <span className="flex-1">
-              {l.name}
+              <ProductLink productId={l.productId} className="font-normal print:no-underline">
+                {l.name}
+              </ProductLink>
               <br />
               <span className="text-text-muted">
                 {l.quantity} x {currencySymbol}
@@ -149,9 +158,11 @@ export default function Receipt({
           <PrinterIcon className="h-4 w-4" />
           Print receipt
         </Button>
-        <Button type="button" variant="primary" onClick={onNewSale} className="min-w-40">
-          New sale
-        </Button>
+        {onNewSale && (
+          <Button type="button" variant="primary" onClick={onNewSale} className="min-w-40">
+            New sale
+          </Button>
+        )}
       </div>
     </div>
   );

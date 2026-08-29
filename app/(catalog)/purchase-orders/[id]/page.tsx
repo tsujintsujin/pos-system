@@ -15,6 +15,7 @@ import Button from "@/app/components/ui/Button";
 import PageHeader from "@/app/components/ui/PageHeader";
 import Badge, { type BadgeVariant } from "@/app/components/ui/Badge";
 import EmptyState from "@/app/components/ui/EmptyState";
+import ProductLink from "@/app/components/ui/ProductLink";
 import { Table, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from "@/app/components/ui/Table";
 
 const STATUS_VARIANTS: Record<string, BadgeVariant> = {
@@ -134,7 +135,8 @@ export default async function PurchaseOrderDetailPage({
                 return (
                   <TableRow key={l.id}>
                     <TableCell>
-                      {l.product.name} <span className="text-text-muted">({l.product.sku})</span>
+                      <ProductLink productId={l.product.id}>{l.product.name}</ProductLink>{" "}
+                      <span className="text-text-muted">({l.product.sku})</span>
                     </TableCell>
                     <TableCell className="text-right">{ordered}</TableCell>
                     <TableCell className="text-right">{received}</TableCell>

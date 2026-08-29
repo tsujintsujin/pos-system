@@ -14,6 +14,7 @@ export interface ReceiptData {
   taxTotal: number;
   grandTotal: number;
   lines: {
+    productId: number;
     name: string;
     sku: string;
     quantity: number;
@@ -48,7 +49,7 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/sales/[id]/
       location: { select: { name: true } },
       lineItems: {
         include: {
-          product: { select: { name: true, sku: true } },
+          product: { select: { id: true, name: true, sku: true } },
           variant: { select: { name: true, sku: true } },
         },
       },
@@ -72,6 +73,7 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/sales/[id]/
     taxTotal: sale.taxTotal.toNumber(),
     grandTotal: sale.grandTotal.toNumber(),
     lines: sale.lineItems.map((li) => ({
+      productId: li.productId,
       name: li.variant ? `${li.product.name} — ${li.variant.name}` : li.product.name,
       sku: li.variant?.sku ?? li.product.sku,
       quantity: li.quantity.toNumber(),

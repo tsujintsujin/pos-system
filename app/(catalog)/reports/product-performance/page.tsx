@@ -5,6 +5,7 @@ import ReportDateFilter from "@/app/components/ReportDateFilter";
 import PageHeader from "@/app/components/ui/PageHeader";
 import Card from "@/app/components/ui/Card";
 import { Table, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from "@/app/components/ui/Table";
+import ProductLink from "@/app/components/ui/ProductLink";
 
 export default async function ProductPerformanceReportPage({
   searchParams,
@@ -72,7 +73,8 @@ function RankTable({
             rows.map((r) => (
               <TableRow key={r.productId}>
                 <TableCell>
-                  {r.name} <span className="text-text-muted">({r.sku})</span>
+                  <ProductLink productId={r.productId}>{r.name}</ProductLink>{" "}
+                  <span className="text-text-muted">({r.sku})</span>
                 </TableCell>
                 <TableCell className="text-right font-medium">
                   {metric === "qty" ? r.quantitySold : `₱${r.revenue.toFixed(2)}`}

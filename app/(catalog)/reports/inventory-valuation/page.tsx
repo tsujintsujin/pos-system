@@ -8,6 +8,7 @@ import StatCard from "@/app/components/ui/StatCard";
 import { LinkButton } from "@/app/components/ui/Button";
 import { DownloadIcon } from "@/app/components/ui/icons";
 import { Table, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from "@/app/components/ui/Table";
+import ProductLink from "@/app/components/ui/ProductLink";
 
 export default async function InventoryValuationReportPage() {
   const gate = await requireRole("canAccessBackOffice");
@@ -91,7 +92,9 @@ export default async function InventoryValuationReportPage() {
             ) : (
               report.rows.map((r) => (
                 <TableRow key={`${r.productId}_${r.variantId ?? "base"}`}>
-                  <TableCell>{r.productName}</TableCell>
+                  <TableCell>
+                    <ProductLink productId={r.productId}>{r.productName}</ProductLink>
+                  </TableCell>
                   <TableCell className="text-text-muted">{r.sku}</TableCell>
                   <TableCell className="text-right">{r.quantityOnHand}</TableCell>
                   <TableCell className="text-right">₱{r.costPrice.toFixed(2)}</TableCell>

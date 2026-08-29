@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { ReturnReceiptData } from "@/app/api/returns/[id]/receipt/route";
 import Button from "@/app/components/ui/Button";
+import ProductLink from "@/app/components/ui/ProductLink";
 import { CheckCircleIcon, PrinterIcon, SpinnerIcon } from "@/app/components/ui/icons";
 import { apiPath } from "@/lib/base-path";
 
@@ -49,7 +50,9 @@ export default function ReturnReceipt({ returnId, onNewReturn }: { returnId: num
         {data.lines.map((l, i) => (
           <div key={i} className="mb-1 flex justify-between gap-2">
             <span className="flex-1">
-              {l.name}
+              <ProductLink productId={l.productId} className="font-normal print:no-underline">
+                {l.name}
+              </ProductLink>
               <br />
               <span className="text-text-muted">
                 qty {l.quantityReturned} {l.restocked ? "(restocked)" : "(not restocked)"}

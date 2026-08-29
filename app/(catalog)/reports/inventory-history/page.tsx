@@ -13,6 +13,7 @@ import PageHeader from "@/app/components/ui/PageHeader";
 import Card from "@/app/components/ui/Card";
 import Select from "@/app/components/ui/Select";
 import { Table, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from "@/app/components/ui/Table";
+import ProductLink from "@/app/components/ui/ProductLink";
 
 export default async function InventoryHistoryReportPage({
   searchParams,
@@ -104,7 +105,7 @@ export default async function InventoryHistoryReportPage({
                 <TableRow key={m.id}>
                   <TableCell className="text-text-muted">{new Date(m.createdAt).toLocaleString()}</TableCell>
                   <TableCell>
-                    {m.productName}
+                    <ProductLink productId={m.productId}>{m.productName}</ProductLink>
                     {m.variantName && <span className="text-text-muted"> — {m.variantName}</span>}
                     <span className="text-text-muted"> ({m.sku})</span>
                   </TableCell>
