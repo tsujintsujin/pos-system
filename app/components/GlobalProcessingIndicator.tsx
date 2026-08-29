@@ -115,7 +115,7 @@ export default function GlobalProcessingIndicator() {
     <div
       role="status"
       aria-live="polite"
-      className="fixed bottom-4 left-4 z-[60] flex items-center gap-2 rounded-full border border-border bg-surface px-3.5 py-2 text-sm font-medium text-text-muted shadow-lg"
+      className="fixed right-4 top-4 z-[60] flex items-center gap-2 rounded-full border border-border bg-surface px-3.5 py-2 text-sm font-medium text-text-muted shadow-lg"
     >
       <SpinnerIcon className="h-4 w-4 animate-spin text-primary" />
       Processing…
