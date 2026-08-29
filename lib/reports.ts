@@ -29,28 +29,94 @@ export interface DateRange {
   toStr: string;
 }
 
-function toDateInputStr(d: Date): string {
+/**
+ * The store's wall clock. Every "which day / which hour did this sale belong to?" decision
+ * routes through this one timezone.
+ *
+ * It has to be explicit rather than "whatever the server's local time is": timestamps are
+ * stored naive-UTC, the database session is UTC, and the app runs on Vercel (also UTC) —
+ * so server-local bucketing would file an 8pm Manila sale under the *next* UTC day, and
+ * would silently disagree with a developer machine sitting in another zone. Override with
+ * the STORE_TIME_ZONE env var if the store isn't in Manila.
+ */
+export const STORE_TIME_ZONE = process.env.STORE_TIME_ZONE || "Asia/Manila";
+
+const storeDateFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: STORE_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+const storePartsFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: STORE_TIME_ZONE,
+  hour12: false,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+});
+
+/** YYYY-MM-DD as it reads on a clock in the store's timezone. */
+export function toStoreDateStr(d: Date): string {
+  // en-CA formats as YYYY-MM-DD, which is exactly the <input type="date"> format.
+  return storeDateFormatter.format(d);
+}
+
+/** The store timezone's UTC offset (ms) at a given instant — DST-correct, since it asks
+ * Intl about that specific moment rather than assuming a fixed offset. */
+function storeOffsetMs(at: Date): number {
+  const parts = Object.fromEntries(
+    storePartsFormatter.formatToParts(at).filter((p) => p.type !== "literal").map((p) => [p.type, p.value]),
+  ) as Record<string, string>;
+  const asIfUtc = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour) % 24,
+    Number(parts.minute),
+    Number(parts.second),
+  );
+  return asIfUtc - Math.floor(at.getTime() / 1000) * 1000;
+}
+
+/**
+ * The absolute instant of a wall-clock moment in the store's timezone, e.g.
+ * storeInstant("2026-08-01", "00:00:00.000") is midnight *in Manila*, not midnight UTC.
+ */
+export function storeInstant(dateStr: string, timeStr: string): Date {
+  const naive = new Date(`${dateStr}T${timeStr}Z`);
+  // First guess the offset at the naive instant, then re-check at the corrected one so a
+  // DST boundary within those few hours resolves to the right side.
+  const firstPass = new Date(naive.getTime() - storeOffsetMs(naive));
+  return new Date(naive.getTime() - storeOffsetMs(firstPass));
+}
+
+/** Store-local date N days before the given store date string. */
+function shiftStoreDate(dateStr: string, days: number): string {
+  const d = new Date(`${dateStr}T12:00:00Z`); // midday avoids DST edge wobble
+  d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
 
 /**
  * Parse `from`/`to` (YYYY-MM-DD) query params into a Date range. Defaults to the last 7 days
  * (inclusive of today) when absent or unparseable. `to` is normalized to end-of-day so the
- * range is inclusive of the whole day picked, not just midnight.
+ * range is inclusive of the whole day picked, not just midnight. Both boundaries are
+ * resolved against the store's wall clock (see STORE_TIME_ZONE).
  */
 export function parseDateRange(params: { from?: string; to?: string }): DateRange {
-  const today = new Date();
-  const defaultFrom = new Date(today);
-  defaultFrom.setDate(defaultFrom.getDate() - 6);
-  const defaultFromStr = toDateInputStr(defaultFrom);
-  const defaultToStr = toDateInputStr(today);
+  const todayStr = toStoreDateStr(new Date());
+  const defaultFromStr = shiftStoreDate(todayStr, -6);
 
   const fromStr = params.from && !Number.isNaN(Date.parse(params.from)) ? params.from : defaultFromStr;
-  const toStr = params.to && !Number.isNaN(Date.parse(params.to)) ? params.to : defaultToStr;
+  const toStr = params.to && !Number.isNaN(Date.parse(params.to)) ? params.to : todayStr;
 
   return {
-    from: new Date(`${fromStr}T00:00:00`),
-    to: new Date(`${toStr}T23:59:59.999`),
+    from: storeInstant(fromStr, "00:00:00.000"),
+    to: storeInstant(toStr, "23:59:59.999"),
     fromStr,
     toStr,
   };
@@ -90,7 +156,9 @@ export async function getSalesSummaryReport(range: DateRange): Promise<SalesSumm
 
   const byDayMap = new Map<string, { total: number; count: number }>();
   for (const s of sales) {
-    const day = s.completedAt!.toISOString().slice(0, 10);
+    // Store-local day, matching how the range boundaries were resolved — bucketing by the
+    // raw UTC date would file an 8pm Manila sale under the following day.
+    const day = toStoreDateStr(s.completedAt!);
     const entry = byDayMap.get(day) ?? { total: 0, count: 0 };
     entry.total += s.grandTotal.toNumber();
     entry.count += 1;
@@ -526,5 +594,318 @@ export async function getShiftReconciliationReport(range: DateRange): Promise<Sh
     variance: s.variance ? s.variance.toNumber() : null,
     expectedCash: s.expectedCash ? s.expectedCash.toNumber() : null,
     closingCount: s.closingCount ? s.closingCount.toNumber() : null,
+  }));
+}
+
+// ---------- 8. Per-product sales series (product detail page chart) ----------
+
+export type ProductSeriesRange = "7d" | "30d" | "90d" | "12mo";
+
+export const PRODUCT_SERIES_RANGES: { key: ProductSeriesRange; label: string }[] = [
+  { key: "7d", label: "7 days" },
+  { key: "30d", label: "30 days" },
+  { key: "90d", label: "90 days" },
+  { key: "12mo", label: "12 months" },
+];
+
+export interface ProductSalesPoint {
+  /** YYYY-MM-DD for daily buckets, YYYY-MM for monthly. */
+  bucket: string;
+  /** Short axis label, e.g. "14 Aug" or "Aug". */
+  label: string;
+  units: number;
+  revenue: number;
+}
+
+export interface ProductSalesSeries {
+  range: ProductSeriesRange;
+  points: ProductSalesPoint[];
+  totalUnits: number;
+  totalRevenue: number;
+  /** Same metrics for the immediately preceding window of equal length, for a "vs before" read. */
+  previousUnits: number;
+  previousRevenue: number;
+}
+
+export function parseProductSeriesRange(value: string | undefined): ProductSeriesRange {
+  return PRODUCT_SERIES_RANGES.some((r) => r.key === value)
+    ? (value as ProductSeriesRange)
+    : "30d";
+}
+
+/** Bucket size and count for each range option. 12mo buckets by month, the rest by day. */
+function seriesShape(range: ProductSeriesRange): { unit: "day" | "month"; count: number } {
+  if (range === "7d") return { unit: "day", count: 7 };
+  if (range === "30d") return { unit: "day", count: 30 };
+  if (range === "90d") return { unit: "day", count: 90 };
+  return { unit: "month", count: 12 };
+}
+
+/**
+ * Buckets are addressed by their store-local calendar key ("2026-08-14" / "2026-08"),
+ * never by a Date, so the JS-side fill loop and the SQL-side `to_char(date_trunc(...))`
+ * are comparing the same strings. Anything Date-shaped here would drift by a timezone.
+ */
+function shiftBucketKey(key: string, unit: "day" | "month", steps: number): string {
+  if (unit === "day") {
+    const d = new Date(`${key}T12:00:00Z`); // midday: immune to DST edges
+    d.setUTCDate(d.getUTCDate() + steps);
+    return d.toISOString().slice(0, 10);
+  }
+  const [y, m] = key.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + steps, 1, 12));
+  return d.toISOString().slice(0, 7);
+}
+
+/** Store-local key of the bucket `count` buckets back from (and including) today. */
+function seriesStartKey(unit: "day" | "month", count: number): string {
+  const todayKey = toStoreDateStr(new Date());
+  const currentKey = unit === "day" ? todayKey : todayKey.slice(0, 7);
+  return shiftBucketKey(currentKey, unit, -(count - 1));
+}
+
+function bucketLabel(key: string, unit: "day" | "month"): string {
+  // Rendered from the key at midday UTC purely to get a month name / day number out of
+  // Intl — the key itself is already the store-local calendar date.
+  const d = new Date(unit === "day" ? `${key}T12:00:00Z` : `${key}-01T12:00:00Z`);
+  return unit === "day"
+    ? d.toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" })
+    : d.toLocaleDateString(undefined, { month: "short", timeZone: "UTC" });
+}
+
+/**
+ * Units sold and revenue for one product over time — "how is this product doing over the
+ * last N days?" on the product detail page.
+ *
+ * Aggregated with date_trunc in SQL rather than pulling every line item and grouping in
+ * JS: a fast-moving product over 12 months is a lot of rows to ship just to sum them.
+ * Empty buckets are filled in afterwards so the line has a continuous shape instead of
+ * silently skipping days with no sales.
+ */
+export async function getProductSalesSeries(
+  productId: number,
+  range: ProductSeriesRange,
+): Promise<ProductSalesSeries> {
+  const { unit, count } = seriesShape(range);
+  const fromKey = seriesStartKey(unit, count);
+  // Equal-length window immediately before `fromKey`, for the previous-period comparison.
+  const previousFromKey = shiftBucketKey(fromKey, unit, -count);
+  const previousFrom = storeInstant(
+    unit === "day" ? previousFromKey : `${previousFromKey}-01`,
+    "00:00:00.000",
+  );
+
+  // Bucket on the store's clock, and hand the key back as text: returning a timestamp and
+  // re-parsing it in JS would reintroduce exactly the UTC/local drift this avoids.
+  const keyFormat = unit === "day" ? "YYYY-MM-DD" : "YYYY-MM";
+  const rows = await prisma.$queryRaw<{ bucket: string; units: number; revenue: number }[]>`
+    SELECT to_char(
+             date_trunc(${unit}, s."completedAt" AT TIME ZONE 'UTC' AT TIME ZONE ${STORE_TIME_ZONE}),
+             ${keyFormat}
+           )                           AS bucket,
+           SUM(li.quantity)::float8    AS units,
+           SUM(li."lineTotal")::float8 AS revenue
+    FROM sale_line_items li
+    JOIN sales s ON s.id = li."saleId"
+    WHERE li."productId" = ${productId}
+      AND s.status = 'COMPLETED'
+      AND s."completedAt" >= ${previousFrom}
+    GROUP BY 1
+    ORDER BY 1`;
+
+  const byBucket = new Map(rows.map((r) => [r.bucket, r]));
+
+  const points: ProductSalesPoint[] = [];
+  for (let i = 0; i < count; i++) {
+    const key = shiftBucketKey(fromKey, unit, i);
+    const row = byBucket.get(key);
+    points.push({
+      bucket: key,
+      label: bucketLabel(key, unit),
+      units: Number(row?.units ?? 0),
+      revenue: round2(Number(row?.revenue ?? 0)),
+    });
+  }
+
+  // Everything in the raw result before `fromKey` belongs to the previous window.
+  let previousUnits = 0;
+  let previousRevenue = 0;
+  for (const r of rows) {
+    if (r.bucket < fromKey) {
+      previousUnits += Number(r.units ?? 0);
+      previousRevenue += Number(r.revenue ?? 0);
+    }
+  }
+
+  return {
+    range,
+    points,
+    totalUnits: points.reduce((s, p) => s + p.units, 0),
+    totalRevenue: round2(points.reduce((s, p) => s + p.revenue, 0)),
+    previousUnits,
+    previousRevenue: round2(previousRevenue),
+  };
+}
+
+// ---------- 9. Dashboard: sales by hour of day ----------
+
+export interface HourlySalesRow {
+  hour: number;
+  label: string;
+  total: number;
+  count: number;
+}
+
+/**
+ * "What time of day does this store actually make money?" — completed sales bucketed by
+ * the hour of completedAt, all 24 hours present so the quiet stretches are visible too.
+ */
+export async function getSalesByHour(range: DateRange): Promise<HourlySalesRow[]> {
+  // completedAt is `timestamp without time zone` holding UTC, and the database session is
+  // UTC — so it has to be re-anchored to UTC and then converted, or a 20:00 Manila sale
+  // would be charted at 12:00.
+  const rows = await prisma.$queryRaw<{ hour: number; total: number; count: number }[]>`
+    SELECT EXTRACT(HOUR FROM (s."completedAt" AT TIME ZONE 'UTC' AT TIME ZONE ${STORE_TIME_ZONE}))::int AS hour,
+           SUM(s."grandTotal")::float8 AS total,
+           COUNT(*)::int               AS count
+    FROM sales s
+    WHERE s.status = 'COMPLETED'
+      AND s."completedAt" >= ${range.from}
+      AND s."completedAt" <= ${range.to}
+    GROUP BY 1
+    ORDER BY 1`;
+
+  const byHour = new Map(rows.map((r) => [r.hour, r]));
+  return Array.from({ length: 24 }, (_, hour) => {
+    const row = byHour.get(hour);
+    return {
+      hour,
+      label: String(hour).padStart(2, "0"),
+      total: round2(Number(row?.total ?? 0)),
+      count: Number(row?.count ?? 0),
+    };
+  });
+}
+
+// ---------- 10. Dashboard: stock at/below reorder point ----------
+
+export interface ReorderAlertRow {
+  productId: number;
+  productName: string;
+  variantName: string | null;
+  sku: string;
+  quantityOnHand: number;
+  reorderThreshold: number;
+  /** How far below the threshold this row sits — the reorder urgency. */
+  shortfall: number;
+}
+
+/**
+ * "What do I need to reorder right now?" — the same at/below-threshold definition the
+ * Inventory page uses, ranked by how deep below the line each row is. Compares
+ * inventory.quantityOnHand against products.reorderThreshold, a cross-table comparison
+ * Prisma's `where` can't express, hence raw SQL.
+ */
+export async function getReorderAlerts(
+  limit = 8,
+  locationId: number = DEFAULT_LOCATION_ID,
+): Promise<ReorderAlertRow[]> {
+  const rows = await prisma.$queryRaw<
+    {
+      productId: number;
+      productName: string;
+      variantName: string | null;
+      sku: string;
+      quantityOnHand: number;
+      reorderThreshold: number;
+    }[]
+  >`
+    SELECT p.id                        AS "productId",
+           p.name                      AS "productName",
+           v.name                      AS "variantName",
+           COALESCE(v.sku, p.sku)      AS sku,
+           i."quantityOnHand"::float8  AS "quantityOnHand",
+           p."reorderThreshold"        AS "reorderThreshold"
+    FROM inventory i
+    JOIN products p ON p.id = i."productId"
+    LEFT JOIN product_variants v ON v.id = i."variantId"
+    WHERE i."locationId" = ${locationId}
+      AND p."trackStock"
+      AND i."quantityOnHand" <= p."reorderThreshold"
+    ORDER BY (p."reorderThreshold" - i."quantityOnHand") DESC, p.name ASC
+    LIMIT ${limit}`;
+
+  return rows.map((r) => ({
+    ...r,
+    quantityOnHand: Number(r.quantityOnHand),
+    reorderThreshold: Number(r.reorderThreshold),
+    shortfall: round2(Number(r.reorderThreshold) - Number(r.quantityOnHand)),
+  }));
+}
+
+// ---------- 11. Dashboard: slow-moving stock ----------
+
+export interface SlowMovingRow {
+  productId: number;
+  productName: string;
+  sku: string;
+  quantityOnHand: number;
+  unitsSold: number;
+  /** Stock on hand valued at cost — the cash actually sitting still. */
+  stockValue: number;
+}
+
+/**
+ * "Where is my money stuck?" — stock-tracked products still holding inventory that sold
+ * nothing at all in the window, ranked by the cash value tied up in them (quantity x
+ * cost). Ranking by value rather than by units is deliberate: ten unsold 500-peso items
+ * matter more than a hundred unsold 5-peso ones.
+ */
+export async function getSlowMovingStock(
+  range: DateRange,
+  limit = 8,
+  locationId: number = DEFAULT_LOCATION_ID,
+): Promise<SlowMovingRow[]> {
+  const rows = await prisma.$queryRaw<
+    {
+      productId: number;
+      productName: string;
+      sku: string;
+      quantityOnHand: number;
+      unitsSold: number;
+      stockValue: number;
+    }[]
+  >`
+    SELECT p.id                                         AS "productId",
+           p.name                                       AS "productName",
+           p.sku                                        AS sku,
+           i."quantityOnHand"::float8                   AS "quantityOnHand",
+           COALESCE(sold.units, 0)::float8              AS "unitsSold",
+           (i."quantityOnHand" * p."costPrice")::float8 AS "stockValue"
+    FROM inventory i
+    JOIN products p ON p.id = i."productId"
+    LEFT JOIN (
+      SELECT li."productId" AS pid, SUM(li.quantity) AS units
+      FROM sale_line_items li
+      JOIN sales s ON s.id = li."saleId"
+      WHERE s.status = 'COMPLETED'
+        AND s."completedAt" >= ${range.from}
+        AND s."completedAt" <= ${range.to}
+      GROUP BY 1
+    ) sold ON sold.pid = p.id
+    WHERE i."locationId" = ${locationId}
+      AND i."variantId" IS NULL
+      AND p."trackStock"
+      AND p."isActive"
+      AND i."quantityOnHand" > 0
+      AND COALESCE(sold.units, 0) = 0
+    ORDER BY "stockValue" DESC, p.name ASC
+    LIMIT ${limit}`;
+
+  return rows.map((r) => ({
+    ...r,
+    quantityOnHand: Number(r.quantityOnHand),
+    unitsSold: Number(r.unitsSold),
+    stockValue: round2(Number(r.stockValue)),
   }));
 }
