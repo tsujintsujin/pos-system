@@ -22,7 +22,13 @@ import { buildReceiptNumber, placeholderReceiptNumber } from "../lib/receipt-num
  * are never called — only their data shape + arithmetic is mirrored.
  */
 
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
+// Seeding MUST go through DIRECT_URL (port 5432), not DATABASE_URL (port 6543).
+// DATABASE_URL points at Supabase's transaction-mode pooler (PgBouncer), which holds no
+// session state and drops idle connections — a multi-minute bulk script reliably dies
+// partway through it. DIRECT_URL is a normal session connection and survives the run.
+const adapter = new PrismaPg({
+  connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL!,
+});
 const prisma = new PrismaClient({ adapter });
 
 const LOCATION_ID = 1;
@@ -584,9 +590,13 @@ async function main() {
   let totalSalesCreated = 0;
   let totalShiftsCreated = 0;
 
-  if (existingCompletedSales < 100) {
-    const DAYS = 30;
+  // Re-running tops up toward TARGET_COMPLETED_SALES instead of bailing out, so a run
+  // that dies partway can simply be run again until it reaches the target.
+  const TARGET_COMPLETED_SALES = 400;
+  if (existingCompletedSales < TARGET_COMPLETED_SALES) {
+    const DAYS = 90;
     for (let daysAgo = DAYS - 1; daysAgo >= 0; daysAgo--) {
+      if (existingCompletedSales + totalSalesCreated >= TARGET_COMPLETED_SALES) break;
       // ~15% of days the store simply had no shift (closed / no data entered that day).
       if (Math.random() < 0.15) continue;
 
@@ -754,7 +764,7 @@ async function main() {
     }
     console.log(`Shifts created: ${totalShiftsCreated}, Sales created: ${totalSalesCreated}`);
   } else {
-    console.log("Sales history already present (>=100 completed sales) — skipping bulk sales generation");
+    console.log(`Sales history already at target (${existingCompletedSales} >= ${TARGET_COMPLETED_SALES} completed sales) — skipping bulk sales generation`);
   }
 
   function buildPayment(paymentMethodId: number, amount: number, isCash: boolean) {

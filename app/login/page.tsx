@@ -24,6 +24,32 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const [demoLoading, setDemoLoading] = useState(false);
+
+  async function handleDemo() {
+    setError(null);
+    setDemoLoading(true);
+    try {
+      const res = await fetch(apiPath("/api/auth/demo"), { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.message ?? "The demo is unavailable right now.");
+        setDemoLoading(false);
+        return;
+      }
+      // Hard navigation on purpose. router.push() followed by router.refresh()
+      // races here — the refresh re-renders the current (login) route and the
+      // pending RSC navigation to /dashboard is discarded, leaving the button
+      // stuck on "Starting demo…" even though the session cookie was set and
+      // the server rendered /dashboard successfully. A full page load always
+      // picks up the new httpOnly cookie, and this path runs exactly once.
+      window.location.assign(apiPath(from ?? "/dashboard"));
+    } catch {
+      setError("Could not start the demo. Check your connection and try again.");
+      setDemoLoading(false);
+    }
+  }
+
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
@@ -118,6 +144,26 @@ function LoginForm() {
             {submitting ? "Signing in…" : "Sign in"}
           </Button>
         </form>
+
+        <div className="mt-6 flex items-center gap-3" aria-hidden="true">
+          <span className="h-px flex-1 bg-border" />
+          <span className="text-xs uppercase tracking-wide text-text-muted">or</span>
+          <span className="h-px flex-1 bg-border" />
+        </div>
+
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={handleDemo}
+          loading={demoLoading}
+          disabled={demoLoading || submitting}
+          className="mt-4 w-full"
+        >
+          {demoLoading ? "Starting demo…" : "Try the demo"}
+        </Button>
+        <p className="mt-2 text-center text-xs text-text-muted">
+          Explore the full system with sample data. Read-only — nothing you do is saved.
+        </p>
 
         <p className="mt-6 text-center text-xs text-text-muted">
           Shared terminal?{" "}

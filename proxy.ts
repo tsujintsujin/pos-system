@@ -18,19 +18,34 @@ function isPublicPath(pathname: string) {
   return false;
 }
 
-async function hasValidSession(request: NextRequest): Promise<boolean> {
+/** Returns the verified session's role name, or null when there is no valid session. */
+async function getSessionRole(request: NextRequest): Promise<string | null> {
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
-  if (!token) return false;
+  if (!token) return null;
 
   const secret = process.env.JWT_SECRET;
-  if (!secret) return false;
+  if (!secret) return null;
 
   try {
-    await jwtVerify(token, new TextEncoder().encode(secret));
-    return true;
+    const { payload } = await jwtVerify(token, new TextEncoder().encode(secret));
+    return typeof payload.roleName === "string" ? payload.roleName : null;
   } catch {
-    return false;
+    return null;
   }
+}
+
+// The demo account must never write. Enforcing that here rather than in each
+// handler is deliberate: there are 20 API routes and 14 server-action modules,
+// and a per-call-site guard only has to be forgotten once to make the public
+// demo writable. Server Actions are POSTs too, so a method check catches them
+// as well. Read methods stay untouched.
+const DEMO_SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+// Logging out is a POST, and a demo user must always be able to leave.
+const DEMO_ALLOWED_WRITE_PATHS = ["/api/auth/logout"];
+
+function isDemoWriteBlocked(pathname: string, method: string): boolean {
+  if (DEMO_SAFE_METHODS.has(method)) return false;
+  return !DEMO_ALLOWED_WRITE_PATHS.includes(pathname);
 }
 
 export async function proxy(request: NextRequest) {
@@ -40,11 +55,21 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const authenticated = await hasValidSession(request);
-  if (!authenticated) {
+  const roleName = await getSessionRole(request);
+  if (!roleName) {
     const loginUrl = new URL(`${BASE_PATH}/login`, request.url);
     loginUrl.searchParams.set("from", pathname);
     return NextResponse.redirect(loginUrl);
+  }
+
+  if (roleName === "DEMO" && isDemoWriteBlocked(pathname, request.method)) {
+    return NextResponse.json(
+      {
+        error: "demo_read_only",
+        message: "This is a read-only demo. Sign in with a real account to make changes.",
+      },
+      { status: 403 }
+    );
   }
 
   return NextResponse.next();

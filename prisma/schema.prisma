@@ -57,6 +57,10 @@ enum RoleName {
   ADMIN
   MANAGER
   CASHIER
+  // Public read-only demo account. Writes are blocked at the proxy layer
+  // (see proxy.ts), not per-route — 34 mutation entry points is too many to
+  // guard individually without eventually missing one.
+  DEMO
 }
 
 model Role {
