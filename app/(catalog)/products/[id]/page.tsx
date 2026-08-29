@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import Image from "next/image";
 import { prisma } from "@/lib/prisma";
 import {
   updateProduct,
@@ -15,6 +14,10 @@ import Select from "@/app/components/ui/Select";
 import Textarea from "@/app/components/ui/Textarea";
 import Button, { LinkButton } from "@/app/components/ui/Button";
 import PageHeader from "@/app/components/ui/PageHeader";
+import ProductLink from "@/app/components/ui/ProductLink";
+import ProductPerformanceCard from "@/app/components/ProductPerformanceCard";
+import ProductImageField from "@/app/components/ProductImageField";
+import { parseProductSeriesRange } from "@/lib/reports";
 import { Table, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from "@/app/components/ui/Table";
 
 const DEFAULT_LOCATION_ID = 1;
@@ -24,7 +27,7 @@ export default async function EditProductPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; success?: string }>;
+  searchParams: Promise<{ error?: string; success?: string; range?: string }>;
 }) {
   const { id: idParam } = await params;
   const sp = await searchParams;
@@ -73,6 +76,8 @@ export default async function EditProductPage({
       />
 
       <Banner error={sp.error} success={sp.success} />
+
+      <ProductPerformanceCard productId={product.id} range={parseProductSeriesRange(sp.range)} />
 
       <Card>
         <form action={updateProduct.bind(null, product.id)} className="flex flex-col gap-4">
@@ -147,29 +152,7 @@ export default async function EditProductPage({
             />
           </div>
 
-          <div className="flex items-end gap-4">
-            <div className="flex-1">
-              <Field
-                label="Image URL"
-                name="imageUrl"
-                type="url"
-                placeholder="https://example.com/product-photo.jpg"
-                defaultValue={product.imageUrl ?? ""}
-              />
-              <p className="mt-1 text-xs text-text-muted">
-                Link to an already-hosted image — this app has no file upload/storage set up.
-              </p>
-            </div>
-            {product.imageUrl && (
-              <Image
-                src={product.imageUrl}
-                alt={product.name}
-                width={64}
-                height={64}
-                className="h-16 w-16 shrink-0 rounded-md border border-border object-cover"
-              />
-            )}
-          </div>
+          <ProductImageField defaultValue={product.imageUrl ?? ""} productName={product.name} />
 
           <div className="flex flex-wrap gap-6 pt-2">
             <Checkbox label="Track stock" name="trackStock" defaultChecked={product.trackStock} />
@@ -288,7 +271,8 @@ export default async function EditProductPage({
                 {product.components.map((row) => (
                   <TableRow key={row.id}>
                     <TableCell>
-                      {row.component.name} <span className="text-text-muted">({row.component.sku})</span>
+                      <ProductLink productId={row.component.id}>{row.component.name}</ProductLink>{" "}
+                      <span className="text-text-muted">({row.component.sku})</span>
                     </TableCell>
                     <TableCell className="text-right">{row.quantity.toString()}</TableCell>
                     <TableCell className="text-right">

@@ -7,6 +7,7 @@ import Select from "@/app/components/ui/Select";
 import Textarea from "@/app/components/ui/Textarea";
 import Button, { LinkButton } from "@/app/components/ui/Button";
 import PageHeader from "@/app/components/ui/PageHeader";
+import ProductImageField from "@/app/components/ProductImageField";
 
 export default async function NewProductPage({
   searchParams,
@@ -77,15 +78,7 @@ export default async function NewProductPage({
             <Field label="Reorder threshold" name="reorderThreshold" type="number" step="1" min="0" defaultValue="0" />
           </div>
 
-          <Field
-            label="Image URL"
-            name="imageUrl"
-            type="url"
-            placeholder="https://example.com/product-photo.jpg"
-          />
-          <p className="-mt-2 text-xs text-text-muted">
-            Link to an already-hosted image — this app has no file upload/storage set up.
-          </p>
+          <ProductImageField />
 
           <div className="flex flex-wrap gap-6 pt-2">
             <Checkbox label="Track stock" name="trackStock" defaultChecked />
