@@ -68,7 +68,9 @@ function resolveQuickRange(key: DashboardRangeKey): DateRange {
 }
 
 function parseQuickRangeKey(value: string | undefined): DashboardRangeKey {
-  return value === "today" || value === "month" ? value : "week";
+  // Default to "month". A week of a real store's data is a handful of transactions,
+  // which reads as an empty system on first load even when 90 days sit behind it.
+  return value === "today" || value === "week" ? value : "month";
 }
 
 export default async function DashboardPage({

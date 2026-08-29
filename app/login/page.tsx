@@ -78,8 +78,13 @@ function LoginForm() {
         return;
       }
 
-      router.push(from && from !== "/login" ? from : "/dashboard");
-      router.refresh();
+      // Hard navigation, same reason as the demo button below: router.push()
+      // followed by router.refresh() races — the refresh re-renders the current
+      // (login) route and discards the pending navigation, so a slow target page
+      // leaves the user staring at the login form with no error. A full load
+      // always picks up the new httpOnly session cookie.
+      window.location.assign(apiPath(from && from !== "/login" ? from : "/dashboard"));
+      return;
     } catch {
       setError("Network error — is the server running?");
     } finally {
