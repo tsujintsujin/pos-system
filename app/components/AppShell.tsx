@@ -114,7 +114,11 @@ export default function AppShell({
           </span>
         </div>
 
-        <div className="mx-auto flex w-full min-w-0 max-w-6xl flex-1 flex-col gap-6 px-6 py-8">
+        {/* Full-bleed inside the shell: no max-width lane. These are dense back-office
+            screens — tables, charts and builder panels all earn the extra width, and
+            capping them left a wide monitor mostly empty. Horizontal padding scales up a
+            little on larger viewports so content doesn't run into the edges. */}
+        <div className="flex w-full min-w-0 flex-1 flex-col gap-6 px-4 py-6 sm:px-6 sm:py-8 2xl:px-10">
           {children}
         </div>
       </div>

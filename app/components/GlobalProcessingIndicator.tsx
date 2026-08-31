@@ -115,7 +115,11 @@ export default function GlobalProcessingIndicator() {
     <div
       role="status"
       aria-live="polite"
-      className="fixed right-4 top-4 z-[60] flex items-center gap-2 rounded-full border border-border bg-surface px-3.5 py-2 text-sm font-medium text-text-muted shadow-lg"
+      // `peer-[[role=status]]:*` reacts to DemoBanner, the preceding sibling in
+      // <body>: when the read-only demo pill is on screen there is no room for a
+      // centered pill and this right-pinned toast on the same row below `md`, so
+      // the toast drops under it. No demo pill rendered -> selector never matches.
+      className="fixed right-4 top-4 z-[60] flex items-center gap-2 rounded-full border border-border bg-surface px-3.5 py-2 text-sm font-medium text-text-muted shadow-lg peer-[[role=status]]:top-16 md:peer-[[role=status]]:top-4"
     >
       <SpinnerIcon className="h-4 w-4 animate-spin text-primary" />
       Processing…

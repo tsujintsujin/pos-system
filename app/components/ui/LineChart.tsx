@@ -33,6 +33,19 @@ export interface LineChartProps {
   gridLines?: number;
   /** Show at most this many x-axis labels, thinning evenly. Keeps 90-day ranges legible. */
   maxXLabels?: number;
+  /**
+   * Where the series key sits. "left" stacks it vertically beside the plot, which reads
+   * better when the labels are long (product or category names) — a horizontal key wraps
+   * to three rows and pushes the chart down. Defaults to "top" so existing callers are
+   * unaffected.
+   */
+  legendPosition?: "top" | "left";
+  /**
+   * Rotate the x-axis labels to vertical. Category axes carry names like "Frozen Longganisa
+   * 500g"; horizontally they overlap into an unreadable smear well before the axis is full.
+   * Vertical labels stay legible at any point count, at the cost of chart height.
+   */
+  verticalXLabels?: boolean;
 }
 
 export default function LineChart({
@@ -43,6 +56,8 @@ export default function LineChart({
   className,
   gridLines = 4,
   maxXLabels = 12,
+  legendPosition = "top",
+  verticalXLabels = false,
 }: LineChartProps) {
   if (labels.length === 0 || series.length === 0) {
     return (
@@ -56,7 +71,10 @@ export default function LineChart({
   }
 
   const paddingTop = 12;
-  const paddingBottom = 26;
+  // Rotated labels need room proportional to the longest one, since they consume vertical
+  // space rather than horizontal. Capped so one runaway name can't squash the plot.
+  const longestLabel = labels.reduce((max, l) => Math.max(max, l.length), 0);
+  const paddingBottom = verticalXLabels ? Math.min(120, 18 + longestLabel * 5.5) : 26;
   const paddingLeft = 8;
   const paddingRight = 8;
   const plotHeight = height - paddingTop - paddingBottom;
@@ -74,6 +92,15 @@ export default function LineChart({
     ...series.filter((s) => s.axis === "right").flatMap((s) => s.values),
   );
 
+  /**
+   * The legend reports each series' OWN peak, not the axis ceiling it is drawn against.
+   * Those coincide when a chart has one series per axis, which is why printing the axis
+   * max here looked right for a long time — but with several series sharing an axis (one
+   * line per customer, say) every entry showed the same number, which reads as a broken
+   * calculation rather than as "this is the axis maximum".
+   */
+  const seriesMax = (s: LineSeries) => (s.values.length > 0 ? Math.max(...s.values) : 0);
+
   const stepX = labels.length > 1 ? plotWidth / (labels.length - 1) : 0;
   const x = (i: number) => paddingLeft + (labels.length > 1 ? i * stepX : plotWidth / 2);
   const y = (value: number, axis: "left" | "right") =>
@@ -85,28 +112,45 @@ export default function LineChart({
   );
 
   const labelStride = Math.max(1, Math.ceil(labels.length / maxXLabels));
+  // Rotated labels don't compete for horizontal room, so every point can be labelled.
+  const effectiveStride = verticalXLabels ? 1 : labelStride;
+  const labelBaseline = height - paddingBottom + 8;
+
+  const onLeft = legendPosition === "left";
+
+  const legend = (
+    <div
+      className={
+        onLeft
+          ? "flex shrink-0 flex-col gap-1.5 sm:w-44"
+          : "mb-2 flex flex-wrap items-center gap-x-4 gap-y-1"
+      }
+    >
+      {series.map((s) => (
+        <span key={s.label} className="inline-flex items-center gap-1.5 text-xs text-text-muted">
+          <span
+            aria-hidden="true"
+            className="inline-block h-0.5 w-4 shrink-0 rounded-full"
+            style={{
+              backgroundColor: s.color,
+              opacity: s.dashed ? 0.55 : 1,
+            }}
+          />
+          <span className={onLeft ? "min-w-0 truncate" : undefined} title={onLeft ? s.label : undefined}>
+            {s.label}
+          </span>
+          <span className="shrink-0 text-text-muted/70">
+            (max {(s.format ?? String)(seriesMax(s))})
+          </span>
+        </span>
+      ))}
+    </div>
+  );
 
   return (
-    <div className={className}>
-      <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1">
-        {series.map((s) => (
-          <span key={s.label} className="inline-flex items-center gap-1.5 text-xs text-text-muted">
-            <span
-              aria-hidden="true"
-              className="inline-block h-0.5 w-4 rounded-full"
-              style={{
-                backgroundColor: s.color,
-                opacity: s.dashed ? 0.55 : 1,
-              }}
-            />
-            {s.label}
-            <span className="text-text-muted/70">
-              (max {(s.format ?? String)(s.axis === "right" ? rightMax : leftMax)})
-            </span>
-          </span>
-        ))}
-      </div>
-
+    <div className={onLeft ? `flex flex-col gap-3 sm:flex-row sm:items-start ${className ?? ""}` : className}>
+      {legend}
+      <div className={onLeft ? "min-w-0 flex-1" : undefined}>
       <svg
         viewBox={`0 0 ${width} ${height}`}
         width="100%"
@@ -159,12 +203,21 @@ export default function LineChart({
         })}
 
         {labels.map((label, i) =>
-          i % labelStride === 0 ? (
+          i % effectiveStride === 0 ? (
             <text
               key={`${label}-${i}`}
               x={x(i)}
-              y={height - 8}
-              textAnchor={i === 0 ? "start" : i === labels.length - 1 ? "end" : "middle"}
+              y={verticalXLabels ? labelBaseline : height - 8}
+              textAnchor={
+                verticalXLabels
+                  ? "end"
+                  : i === 0
+                    ? "start"
+                    : i === labels.length - 1
+                      ? "end"
+                      : "middle"
+              }
+              transform={verticalXLabels ? `rotate(-90 ${x(i)} ${labelBaseline})` : undefined}
               className="fill-text-muted text-[10px]"
             >
               {label}
@@ -178,6 +231,7 @@ export default function LineChart({
           Each series is scaled to its own maximum — compare shapes, not heights.
         </p>
       )}
+      </div>
     </div>
   );
 }

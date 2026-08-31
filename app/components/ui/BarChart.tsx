@@ -3,6 +3,7 @@
  * (primary token, darkening to primary-hover on :hover via pure CSS), recessive
  * (border-token, low-opacity) gridlines, x-axis labels. No dual-axis, no legend needed
  * for a single series. Value-on-hover uses a native <title> tooltip — no client JS.
+ * Each bar shows its value above it; x-axis labels are truncated to 12 characters.
  * Plain server-renderable SVG, consistent with this codebase's zero-chart-dependency
  * pattern (see Sparkline.tsx).
  */
@@ -12,6 +13,8 @@ export interface BarChartDatum {
   value: number;
   /** Full value for the hover tooltip, e.g. "₱1,234.00" — falls back to the raw value. */
   tooltip?: string;
+  /** Formatted value shown on the bar itself, e.g. "₱1,234.00" — falls back to the raw value. */
+  valueLabel?: string;
 }
 
 export interface BarChartProps {
@@ -21,6 +24,12 @@ export interface BarChartProps {
   className?: string;
   /** Number of horizontal gridlines (including the baseline). */
   gridLines?: number;
+  /**
+   * Rotate the x-axis labels to vertical. Category axes carry names like "Frozen Longganisa
+   * 500g"; horizontally they overlap into an unreadable smear well before the axis is full.
+   * Vertical labels stay legible at any bar count, at the cost of chart height.
+   */
+  verticalXLabels?: boolean;
 }
 
 export default function BarChart({
@@ -29,10 +38,18 @@ export default function BarChart({
   height = 220,
   className,
   gridLines = 4,
+  verticalXLabels = false,
 }: BarChartProps) {
   const maxValue = Math.max(...data.map((d) => d.value), 1);
-  const paddingTop = 10;
-  const paddingBottom = 24;
+  // Reserves room above the tallest bar for its value label, which sits above the bar
+  // regardless of height — without this, the label for a max-height bar would have
+  // nowhere to go but down into the bar itself.
+  const paddingTop = 20;
+  // Rotated labels need room proportional to the longest one, since they now consume
+  // vertical space rather than horizontal. Capped so one runaway name can't squash the plot.
+  // Labels are truncated to 12 characters for display, so the longest possible is 12.
+  const longestLabel = Math.min(12, data.reduce((max, d) => Math.max(max, d.label.length), 0));
+  const paddingBottom = verticalXLabels ? Math.min(120, 16 + longestLabel * 5.5) : 24;
   const paddingX = 8;
   const plotHeight = height - paddingTop - paddingBottom;
   const plotWidth = width - paddingX * 2;
@@ -89,11 +106,24 @@ export default function BarChart({
             </path>
             <text
               x={x + barWidth / 2}
-              y={height - 6}
+              y={y - 4}
               textAnchor="middle"
+              className="fill-text text-[9px]"
+            >
+              {d.valueLabel ?? d.value}
+            </text>
+            <text
+              x={x + barWidth / 2}
+              y={verticalXLabels ? paddingTop + plotHeight + 8 : height - 6}
+              textAnchor={verticalXLabels ? "end" : "middle"}
+              transform={
+                verticalXLabels
+                  ? `rotate(-90 ${x + barWidth / 2} ${paddingTop + plotHeight + 8})`
+                  : undefined
+              }
               className="fill-text-muted text-[10px]"
             >
-              {d.label}
+              {d.label.slice(0, 12)}
             </text>
           </g>
         );

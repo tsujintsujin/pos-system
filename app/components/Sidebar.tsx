@@ -19,6 +19,7 @@ import {
   PrinterIcon,
   ChevronLeftIcon,
   MenuIcon,
+  PencilIcon,
 } from "@/app/components/ui/icons";
 
 interface NavItem {
@@ -63,6 +64,9 @@ const NAV_SECTIONS: NavSection[] = [
     label: "System",
     items: [
       { label: "Reports", href: "/reports", icon: ChartBarIcon },
+      // Sits next to Reports on purpose: that one lists the fixed reports, this one builds
+      // and publishes ad-hoc visuals. Different names so the nav never reads as a coin flip.
+      { label: "Reports Visualizer", href: "/report-builder", icon: PencilIcon },
       { label: "Settings", href: "/settings", icon: SettingsIcon },
     ],
   },
